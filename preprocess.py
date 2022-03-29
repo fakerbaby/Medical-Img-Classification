@@ -1,18 +1,28 @@
+"""
+@time  2022/3/27
+@author shenwei
 
+"""
 import os
 from pathlib import Path
 from fnmatch import fnmatch
 import shutil
 import re
 
+from argparse import ArgumentParser
 import csv
 from tkinter import S
 from turtle import Turtle
 import pandas as pd
 
-source_path = './dataset/'
-target_path = './dataset/data/'
 
+source_path = './data/'
+target_path = './data/img/'
+
+parser = ArgumentParser()
+parser.add_argument('source', type=str, help='data source path', nargs='?', default= source_path)
+parser.add_argument('dir',type=str, help='target path', nargs='?', default= target_path)
+args = parser.parse_args()
 
 
 all_content = os.listdir(source_path)
@@ -23,8 +33,6 @@ print("mulu:",len(all_content))
 
 # def get_filesnum(source_path):
 #     return  sum([len(files) for root,dirs,files in os.walk(source_path)])
-
-
 
 def filter(source_path):
     # 对001处理后然后 去除每个二级目录下的docx文件，然后提取所有的bmp文件
@@ -85,9 +93,12 @@ def find_by_pattern(str_list):
         return True
     return False
     
+def add_header(csv_path):
+    df = pd.read_csv(csv_path, names=["img_name","label"])
+    return df.to_csv(csv_path, index = False)
 
-
-                        
+                  
+                  
 def generate_csv(source_path, target_path):
     label_list = []
     filed_name = ['img_name','label']
@@ -102,7 +113,7 @@ def generate_csv(source_path, target_path):
         if find_by_pattern(bmp):
             label_list.append(1)
         else:
-            label_list.append(-1)
+            label_list.append(0)
     
     label_dict = dict(zip(bmp_list, label_list))
     print(label_dict)
@@ -115,19 +126,20 @@ def generate_csv(source_path, target_path):
                 
     except IOError as e:
         print(e.strerror)
-        
-        
+    
+    add_header(source_path + '/label/label.csv')
     #generate a label.csv 
 
-
-                      
+    
+def main():
+    source_path = args.source
+    target_path = args.dir
+    filter(source_path)
+    all_merge(source_path, target_path)
+    # print(get_filesnum(source_path))
+    generate_csv(source_path, target_path)
     
     
-filter(source_path)
 
-all_merge(source_path, target_path)
-
-# print(get_filesnum(source_path))
-
-generate_csv(source_path, target_path)
-
+if __name__=='__main__':
+    main()
