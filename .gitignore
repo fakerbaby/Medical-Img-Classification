@@ -1,5 +1,7 @@
-dataset/
+data
 
 *.ipynb
 
 .ipynb_checkpoints/
+
+data/
