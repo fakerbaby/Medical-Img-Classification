@@ -176,4 +176,7 @@ def main():
     out = model(input)
     print(out.shape)    
 
-main()
+# main()
+correct = 0.123
+test_loss = 0.23214213
+print(f"Accuracy for {1} fold: Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")

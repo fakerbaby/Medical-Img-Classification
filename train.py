@@ -1,3 +1,4 @@
+from statistics import mode
 from unittest import result
 from model import AutoEncoder, Classification_NNet
 from DataLoader import loader, MedicalImageDataset
@@ -27,12 +28,14 @@ args = parser.parse_args()
 
 # CUDA
 os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu_id
-use_cuda = torch.cuda.is_available()
+
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 
 # Random seed
 torch.manual_seed(42)
 
+batch_size = 10
 
 def reset_weights(m):
   '''
@@ -41,7 +44,7 @@ def reset_weights(m):
   '''
   for layer in m.children():
    if hasattr(layer, 'reset_parameters'):
-    print(f'Reset trainable parameters of layer = {layer}')
+    # print(f'Reset trainable parameters of layer = {layer}')
     layer.reset_parameters()
 
 
@@ -65,9 +68,8 @@ def train_loop(dataloader, model, loss_fn, optimizer):
     cur_loss = 0.0
     for batch, (X, y) in enumerate(dataloader):
         # Compute prediction and loss
-    # if use_cuda:
-    #     #     X.cuda()
-    #     #     y.cuda()
+        X = X.to(device)
+        y = y.to(device)
         X = Variable(X)
         y= Variable(y)
         pred = model(X)
@@ -79,30 +81,31 @@ def train_loop(dataloader, model, loss_fn, optimizer):
         optimizer.step()
 
         cur_loss += loss.item()
+     
         if batch % 300 == 299:
-            loss, current = cur_loss/300, batch * len(X)
-            print(f"minibatch:{batch+1} loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
+            loss, current = cur_loss/300, batch * size * batch_size
+            print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
             cur_loss = 0.0
             
 def test_loop(dataloader, model, loss_fn, k, outputs):
-    size = dataloader.__len__()
     num_batches = len(dataloader)
     test_loss, correct = 0, 0
-    
+    total = 0
     with torch.no_grad():
+        model.eval()
         for X, y in dataloader:
-            # if use_cuda:
-    #     #     X.cuda()
-    #     #     y.cuda()
+            X = X.to(device)
+            y = y.to(device)
             X = Variable(X)
             y= Variable(y)
             pred = model(X)
             test_loss += loss_fn(pred, y).item()
-            correct += (pred.argmax(1)==y).type(torch.float).sum().item()
+            total += y.size(0)
+            correct += (pred == y).type(torch.float).sum().item()
     
     test_loss /= num_batches
-    correct /= size
-    print(f"Accuracy for {k} fold: Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
+    correct /= total
+    print(f"Accuracy for {k+1} fold: Accuracy: {(100.0 *correct):>0.1f}%, Test loss: {test_loss:>8f} \n")
     outputs[k] = 100.0 * (correct) 
     
     
@@ -111,7 +114,7 @@ def test_loop(dataloader, model, loss_fn, k, outputs):
 def train():
     k_folds = 5
     path = "./data"
-    epochs = 5
+    epochs = 1
     outputs = {}  
     
     img_label = os.path.join(path, 'label', 'label.csv')
@@ -122,12 +125,11 @@ def train():
     # Define the K-fold Cross Validator
     kfold = KFold(n_splits=k_folds, shuffle=True)
     # Start print
-    print('--------------------------------')
 
     # K-fold Cross Validation model evaluation
     for fold, (train_ids, test_ids) in enumerate(kfold.split(data_set)):
         print(f'FOLD {fold}')
-        print('-'*10)
+        print('='*10)
           
         # Sample elements randomly from a given list of ids, no replacement.
         train_subsampler = torch.utils.data.SubsetRandomSampler(train_ids)
@@ -139,19 +141,18 @@ def train():
         # Init the NN
         model = Classification_NNet()
         # writer = SummaryWriter()
-        # if use_cuda:
-            # model = model.cuda() 
+        model = model.to(device)
         model.apply(reset_weights)
         
-        optimizer = optim.Adam(model.parameters(), lr = 1e-1, weight_decay = 1e-8)
+        optimizer = optim.Adam(model.parameters(), lr = 1e-1, weight_decay = 1e-5)
         loss_function = nn.CrossEntropyLoss()
              
         for epoch in range(epochs):
             print('epoch {}'.format(epoch+1))
-            print('*'*20)
+            print(''*20)
             train_loop(trainloader, model, loss_function, optimizer)
            
-        print('Training is Done! Saving trained model.')
+        print('Epoch Training is Done! Saving trained model.')
         print('Starting testing!')
         save_path = f'./checkpoints/model-fold-{fold}.pth'
         torch.save(model.state_dict(), save_path)
@@ -164,7 +165,7 @@ def train():
     print('-'*10)
     sum = 0.0
     for key, value in outputs.items():
-        print(f'FOLD{key}: {value}%')
+        print(f'FOLD{key+1}: {value}%')
         sum += value
     print('Average:', sum/len(outputs.items()),'%')
     print('ALl Done!')
