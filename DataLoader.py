@@ -61,14 +61,27 @@ preprocess = transforms.Compose([
     lambda x: Image.open(x).convert('RGB'),
     # transforms.Scale(256),
     # transforms.CenterCrop(224),
-    transforms.Resize((784,784)),
+    transforms.Resize((224,224)),
     transforms.ToTensor(),
     normalize
 ])
 
 
+
+augement = transforms.Compose([
+    lambda x: Image.open(x).convert('RGB'),
+    # transforms.Scale(256),
+    # transforms.CenterCrop(224),
+    transforms.Resize((224,224)),
+    transforms.RandomHorizontalFlip(),
+    transforms.RandomCrop(196),
+    transforms.ColorJitter(brightness=0.5, contrast=0.5, hue=0.5),
+    transforms.ToTensor(),
+    normalize
+])
+
 class MedicalImageDataset(Dataset):
-    def __init__(self, anonotations_file, img_dir, transform=None, target_transform=None) -> None:
+     def __init__(self, anonotations_file, img_dir, transform=preprocess, target_transform=None) -> None:
         # super().__init__()
         self.imag_labels = pd.read_csv(anonotations_file)
         self.img_dir = img_dir
@@ -79,19 +92,69 @@ class MedicalImageDataset(Dataset):
         # return len()
         img_path = os.path.join(self.img_dir, self.imag_labels.iloc[idx, 0])
         #default transform
-        image = preprocess(img_path)
+        # image = preprocess(img_path)
         label = self.imag_labels.iloc[idx, 1]
         
         if self.tranform:
-            image = self.tranform(image)
+            image = self.tranform(img_path)
         if self.target_transform:
-            image = self.target_transform(image)
+            image = self.target_transform(img_path)
+        return image, label
+    
+    def __len__(self):
+        return len(self.imag_labels)
+
+
+class TrainDataset(Dataset):
+    def __init__(self, anonotations_file, img_dir, transform=augement, target_transform=None) -> None:
+        # super().__init__()
+        self.imag_labels = pd.read_csv(anonotations_file)
+        self.img_dir = img_dir
+        self.tranform = transform
+        self.target_transform = target_transform
+    
+    def __getitem__(self, idx):
+        # return len()
+        img_path = os.path.join(self.img_dir, self.imag_labels.iloc[idx, 0])
+        #default transform
+        # image = preprocess(img_path)
+        label = self.imag_labels.iloc[idx, 1]
+        
+        if self.tranform:
+            image = self.tranform(img_path)
+        if self.target_transform:
+            image = self.target_transform(img_path)
         return image, label
     
     def __len__(self):
         return len(self.imag_labels)
     
-
+class TestDataset(Dataset):
+     def __init__(self, anonotations_file, img_dir, transform=preprocess, target_transform=None) -> None:
+        # super().__init__()
+        self.imag_labels = pd.read_csv(anonotations_file)
+        self.img_dir = img_dir
+        self.tranform = transform
+        self.target_transform = target_transform
+    
+    def __getitem__(self, idx):
+        # return len()
+        img_path = os.path.join(self.img_dir, self.imag_labels.iloc[idx, 0])
+        #default transform
+        # image = preprocess(img_path)
+        label = self.imag_labels.iloc[idx, 1]
+        
+        if self.tranform:
+            image = self.tranform(img_path)
+        if self.target_transform:
+            image = self.target_transform(img_path)
+        return image, label
+    
+    def __len__(self):
+        return len(self.imag_labels)
+    
+    
+    
 
     
 def unnorm(img, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
@@ -101,7 +164,7 @@ def unnorm(img, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
 
 
 def loader(img_label, img_dir):
-    return DataLoader(MedicalImageDataset(img_label, img_dir), batch_size=32, shuffle=True)
+    return DataLoader(TrainDataset(img_label, img_dir), batch_size=32, shuffle=True)
 
 # def testloader(img_label, img_dir):
 #     return DataLoader(MedicalImageDataset(img_label, img_dir), batch_size=32, shuffle=False)
