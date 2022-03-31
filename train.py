@@ -124,6 +124,8 @@ def train():
     path = "./data"
     epochs = 5
     outputs = {}  
+    lr = 3e-4
+    weight_decay = 1e-3 
     
     img_label = os.path.join(path, 'label', 'label.csv')
     img_dir = os.path.join(path, 'modify')
