@@ -2,8 +2,8 @@ from statistics import mode
 from turtle import forward
 import torch
 import torch.nn as nn
-# import torch.nn.functional as F
 import os
+import torchvision.models as models
 
 
 
@@ -53,15 +53,6 @@ class CNNet(nn.Module):
 
 
 
-class Classification_NNet(nn.Module):
-    def __init__(self) -> None:
-        super().__init__()
-        self.module = AutoEncoder()
-        self.module2 = ResNet50()
-        
-    def forward(self, x):
-        x = self.module.forward(x)
-        return self.module2.forward(x)
 
 
 __all__ = ['ResNet50', 'ResNet101','ResNet152']
@@ -167,6 +158,22 @@ def ResNet152():
 
 
 
+
+
+
+class Classification_NNet(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.module = AutoEncoder()
+        self.module2 = models.resnet18(pretrained = True)
+        self.fc = nn.Linear(1000, 2)
+        
+    def forward(self, x):
+        x = self.module.forward(x)
+        x = self.module2.forward(x)
+        return self.fc(x)
+
+
     
 def main():
     model = Classification_NNet()
@@ -176,7 +183,10 @@ def main():
     out = model(input)
     print(out.shape)    
 
-# main()
-correct = 0.123
-test_loss = 0.23214213
-print(f"Accuracy for {1} fold: Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
+
+
+def feature_extract():
+    #todo
+    pass
+
+main()

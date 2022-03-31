@@ -1,5 +1,3 @@
-from statistics import mode
-from unittest import result
 from model import AutoEncoder, Classification_NNet
 from DataLoader import loader, MedicalImageDataset
 import matplotlib.pyplot as plt
@@ -35,7 +33,7 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 # Random seed
 torch.manual_seed(42)
 
-batch_size = 10
+batch_size = 5
 
 def reset_weights(m):
   '''
@@ -64,8 +62,10 @@ def get_acc(outputs, labels):
 
 
 def train_loop(dataloader, model, loss_fn, optimizer):
-    size = len(dataloader)
+    size = len(dataloader) * batch_size
+    running_acc = 0.0
     cur_loss = 0.0
+    total = 0.0
     for batch, (X, y) in enumerate(dataloader):
         # Compute prediction and loss
         X = X.to(device)
@@ -79,13 +79,20 @@ def train_loop(dataloader, model, loss_fn, optimizer):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-
         cur_loss += loss.item()
-     
-        if batch % 300 == 299:
-            loss, current = cur_loss/300, batch * size * batch_size
-            print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
+        total += y.size(0)
+        
+        _, out = torch.max(pred.data, 1)
+        running_acc += (y == out).type(torch.float).sum().item()
+        
+        if (batch+1) % 200 == 0 :
+            loss, current = cur_loss/200, (batch+1) * batch_size        
+            print(f"loss: {loss:>7f},  [{current:>5d}/{int(size/200)*200:>5d}] ")
             cur_loss = 0.0
+    running_acc /= total 
+    print("running_accuracy: ",running_acc)
+   
+    
             
 def test_loop(dataloader, model, loss_fn, k, outputs):
     num_batches = len(dataloader)
@@ -101,7 +108,8 @@ def test_loop(dataloader, model, loss_fn, k, outputs):
             pred = model(X)
             test_loss += loss_fn(pred, y).item()
             total += y.size(0)
-            correct += (pred == y).type(torch.float).sum().item()
+            _, out = torch.max(pred.data, 1)
+            correct += (y == out).type(torch.float).sum().item()
     
     test_loss /= num_batches
     correct /= total
@@ -114,11 +122,11 @@ def test_loop(dataloader, model, loss_fn, k, outputs):
 def train():
     k_folds = 5
     path = "./data"
-    epochs = 1
+    epochs = 5
     outputs = {}  
     
     img_label = os.path.join(path, 'label', 'label.csv')
-    img_dir = os.path.join(path, 'img')
+    img_dir = os.path.join(path, 'modify')
     
     data_set = MedicalImageDataset(img_label, img_dir) 
     
@@ -128,15 +136,15 @@ def train():
 
     # K-fold Cross Validation model evaluation
     for fold, (train_ids, test_ids) in enumerate(kfold.split(data_set)):
-        print(f'FOLD {fold}')
+        print(f'FOLD {fold+1}')
         print('='*10)
           
         # Sample elements randomly from a given list of ids, no replacement.
         train_subsampler = torch.utils.data.SubsetRandomSampler(train_ids)
         test_subsampler = torch.utils.data.SubsetRandomSampler(test_ids)
         
-        trainloader = DataLoader(data_set, batch_size=10, sampler=train_subsampler)
-        testloader = DataLoader(data_set, batch_size=10, sampler=test_subsampler)
+        trainloader = DataLoader(data_set, batch_size=batch_size, sampler=train_subsampler)
+        testloader = DataLoader(data_set, batch_size=batch_size, sampler=test_subsampler)
 
         # Init the NN
         model = Classification_NNet()
@@ -144,7 +152,7 @@ def train():
         model = model.to(device)
         model.apply(reset_weights)
         
-        optimizer = optim.Adam(model.parameters(), lr = 1e-1, weight_decay = 1e-5)
+        optimizer = optim.Adam(model.parameters(), lr = 1e-2, weight_decay = 1e-8)
         loss_function = nn.CrossEntropyLoss()
              
         for epoch in range(epochs):
@@ -154,7 +162,9 @@ def train():
            
         print('Epoch Training is Done! Saving trained model.')
         print('Starting testing!')
-        save_path = f'./checkpoints/model-fold-{fold}.pth'
+        Time = time.ctime()
+        Time = Time.replace(' ','_')
+        save_path = f'./checkpoints/model-fold-{fold}-{Time}.pth'
         torch.save(model.state_dict(), save_path)
         
         #Evaluation this fold
@@ -172,6 +182,4 @@ def train():
 
 
 
-train()
-
-    
+# train()

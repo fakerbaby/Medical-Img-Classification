@@ -52,11 +52,6 @@ def data_split(path):
     # return number_train, number_test
 
 
-# labels_map = {
-#     0: "negative",
-#     1: "positive",
-# }
-
 normalize = transforms.Normalize(
     mean=[0.485, 0.456, 0.406],
     std=[0.229, 0.224, 0.225]
