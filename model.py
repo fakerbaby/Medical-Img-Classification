@@ -1,3 +1,4 @@
+from cgitb import reset
 from statistics import mode
 from turtle import forward
 import torch
@@ -187,6 +188,30 @@ def main():
 
 def feature_extract():
     #todo
-    pass
+    img_path = ''
+    sav_path = ''
+    extrac_list = []
+    reset = models.resnet50(pretrained = True)
+    
+    
+
+# 中间层特征提取
+class FeatureExtractor(nn.Module):
+    def __init__(self, submodule, extracted_layers):
+        super(FeatureExtractor, self).__init__()
+        self.submodule = submodule
+        self.extracted_layers = extracted_layers
+ 
+    # 自己修改forward函数
+    def forward(self, x):
+        outputs = []
+        for name, module in self.submodule._modules.items():
+            if name is "fc": x = x.view(x.size(0), -1)
+            x = module(x)
+            if name in self.extracted_layers:
+                outputs.append(x)
+        return outputs
+    
+    
 
 main()

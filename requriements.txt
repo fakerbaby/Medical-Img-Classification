@@ -2,3 +2,5 @@ torch
 pandas
 numpy
 opencv-python
+sklearn
+matplotlib
