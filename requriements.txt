@@ -2,5 +2,10 @@ torch
 pandas
 numpy
 opencv-python
+<<<<<<< HEAD
 sklearn
 matplotlib
+=======
+tensorboard
+matplotlib
+>>>>>>> b053fc14b6182685da28aeb77234d557d1a6133e

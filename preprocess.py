@@ -111,9 +111,9 @@ def generate_csv(source_path, target_path):
     # print(bmp_list)
     for bmp in bmp_list:
         if find_by_pattern(bmp):
-            label_list.append(1)
-        else:
             label_list.append(0)
+        else:
+            label_list.append(1)
     
     label_dict = dict(zip(bmp_list, label_list))
     print(label_dict)

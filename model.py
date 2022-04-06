@@ -12,10 +12,10 @@ class AutoEncoder(nn.Module):
     def __init__(self) -> None:
         super(AutoEncoder, self).__init__()
         self.encoder = nn.Sequential(
-            nn.Linear(784, 392),
+            nn.Linear(224, 128),
             nn.ReLU(True),
-            nn.Linear(392 , 128),
-            nn.ReLU(True),
+            # nn.Linear(392 , 128),
+            # nn.ReLU(True),
             nn.Linear(128, 64),
             nn.ReLU(True), nn.Linear(64, 12), nn.ReLU(True), nn.Linear(12, 3))
         self.decoder = nn.Sequential(
@@ -24,7 +24,10 @@ class AutoEncoder(nn.Module):
             nn.Linear(12, 64),
             nn.ReLU(True),
             nn.Linear(64, 128),
-            nn.ReLU(True), nn.Linear(128, 392 ), nn.ReLU(True), nn.Linear(392, 784), nn.Tanh())
+            nn.ReLU(True), 
+            # nn.Linear(128, 392 ),
+            # nn.ReLU(True), 
+            nn.Linear(128, 224), nn.Tanh())
         
     def forward(self, x):
         x = self.encoder(x)
@@ -172,7 +175,8 @@ class Classification_NNet(nn.Module):
     def forward(self, x):
         x = self.module.forward(x)
         x = self.module2.forward(x)
-        return self.fc(x)
+        x = self.fc(x)
+        return torch.sigmoid(x)
 
 
     
@@ -180,7 +184,7 @@ def main():
     model = Classification_NNet()
     print(model)
     
-    input = torch.randn(4, 3, 784, 784)
+    input = torch.randn(4, 3, 224, 224)
     out = model(input)
     print(out.shape)    
 
