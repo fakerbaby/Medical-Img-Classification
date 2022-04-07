@@ -12,7 +12,9 @@ class AutoEncoder(nn.Module):
     def __init__(self) -> None:
         super(AutoEncoder, self).__init__()
         self.encoder = nn.Sequential(
-            nn.Linear(224, 128),
+            nn.Linear(512, 384),
+            nn.ReLU(True),
+            nn.Linear(384, 128),
             nn.ReLU(True),
             # nn.Linear(392 , 128),
             # nn.ReLU(True),
@@ -25,9 +27,10 @@ class AutoEncoder(nn.Module):
             nn.ReLU(True),
             nn.Linear(64, 128),
             nn.ReLU(True), 
-            # nn.Linear(128, 392 ),
-            # nn.ReLU(True), 
-            nn.Linear(128, 224), nn.Tanh())
+            nn.Linear(128, 384 ),
+            nn.ReLU(True), 
+            nn.Linear(384, 512), 
+            nn.Tanh())
         
     def forward(self, x):
         x = self.encoder(x)
@@ -170,13 +173,16 @@ class Classification_NNet(nn.Module):
         super().__init__()
         self.module = AutoEncoder()
         self.module2 = models.resnet18(pretrained = True)
-        self.fc = nn.Linear(1000, 2)
+        self.fc = nn.Sequential(
+            nn.Dropout(True),
+            nn.Linear(1000, 2))
         
     def forward(self, x):
         x = self.module.forward(x)
         x = self.module2.forward(x)
         x = self.fc(x)
-        return torch.sigmoid(x)
+        x = torch.sigmoid(x)
+        return x
 
 
     

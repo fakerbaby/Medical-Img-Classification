@@ -54,8 +54,8 @@ def filter(source_path):
                             except OSError as e:
                                 print(f'{bmp}:{e.strerror}')
                         
-                        if fnmatch(bmp, '[0-9][0-9].bmp'):
-                            print(bmp)
+                        if fnmatch(bmp, '[0-9]*.bmp'):
+                            # print(bmp)
                             try:
                                  os.remove(source_path + content + '/' +bmp_t +'/' + bmp)
                             except OSError as e:
@@ -110,6 +110,9 @@ def generate_csv(source_path, target_path):
     bmp_list = os.listdir(target_path)
     # print(bmp_list)
     for bmp in bmp_list:
+        if fnmatch(bmp, '[0-9]*.bmp'):
+            tmp = os.path.join(target_path, bmp)
+            os.remove(tmp)
         if find_by_pattern(bmp):
             label_list.append(0)
         else:
@@ -132,6 +135,11 @@ def generate_csv(source_path, target_path):
 
     
 def main():
+    try:
+        os.mkdir('data/img')
+    except OSError as e:
+        print(e.strerror)
+
     source_path = args.source
     target_path = args.dir
     filter(source_path)

@@ -61,7 +61,7 @@ preprocess = transforms.Compose([
     lambda x: Image.open(x).convert('RGB'),
     # transforms.Scale(256),
     # transforms.CenterCrop(224),
-    transforms.Resize((224,224)),
+    transforms.Resize((512,512)),
     transforms.ToTensor(),
     normalize
 ])
@@ -72,7 +72,7 @@ augement = transforms.Compose([
     lambda x: Image.open(x).convert('RGB'),
     # transforms.Scale(256),
     # transforms.CenterCrop(224),
-    transforms.Resize((224,224)),
+    transforms.Resize((512,512)),
     transforms.RandomHorizontalFlip(),
     transforms.RandomCrop(196),
     transforms.ColorJitter(brightness=0.5, contrast=0.5, hue=0.5),
