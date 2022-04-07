@@ -81,7 +81,7 @@ augement = transforms.Compose([
 ])
 
 class MedicalImageDataset(Dataset):
-     def __init__(self, anonotations_file, img_dir, transform=preprocess, target_transform=None) -> None:
+    def __init__(self, anonotations_file, img_dir, transform=preprocess, target_transform=None) -> None:
         # super().__init__()
         self.imag_labels = pd.read_csv(anonotations_file)
         self.img_dir = img_dir
@@ -130,7 +130,7 @@ class TrainDataset(Dataset):
         return len(self.imag_labels)
     
 class TestDataset(Dataset):
-     def __init__(self, anonotations_file, img_dir, transform=preprocess, target_transform=None) -> None:
+    def __init__(self, anonotations_file, img_dir, transform=preprocess, target_transform=None) -> None:
         # super().__init__()
         self.imag_labels = pd.read_csv(anonotations_file)
         self.img_dir = img_dir

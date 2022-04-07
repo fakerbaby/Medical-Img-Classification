@@ -34,7 +34,7 @@ device = torch.device('cuda:3' if torch.cuda.is_available() else 'cpu')
 
 # Random seed
 torch.manual_seed(42)
-batch_size = 10
+batch_size = 50
 writer = SummaryWriter()
 
 
@@ -64,10 +64,28 @@ def get_acc(outputs, labels):
     return acc
 
 
-def train_loop(dataloader, model, loss_fn, optimizer):
+def train_loop(dataloader, model, loss_fn, optimizer, epoch):
+    """
+    This function is the main training loop. 
+    
+    It takes in a dataloader, a model, a loss function, an optimizer, and an epoch number. 
+    
+    It then iterates through the dataloader, and for each batch, it passes the batch through the model, 
+    calculates the loss, computes the gradient of the loss with respect to the parameters of the model, 
+    updates the parameters of the model, and then zero's out the gradients. 
+    
+    The function returns the average loss for the epoch.
+    
+    :param dataloader: The PyTorch DataLoader that we created above
+    :param model: The model we defined earlier
+    :param loss_fn: The loss function we're using. In our case, we'll use the cross-entropy loss
+    :param optimizer: The optimizer that will be used to train the model
+    :param epoch: The current epoch number
+    """
     size = len(dataloader) * batch_size
     running_acc = 0.0
     cur_loss = 0.0
+    loss_sum = 0.0
     total = 0.0
     for batch, (X, y) in enumerate(dataloader):
         # Compute prediction and loss
@@ -79,7 +97,7 @@ def train_loop(dataloader, model, loss_fn, optimizer):
         loss = loss_fn(pred, y)
         
         grid = make_grid(X)
-        # writer.add_image('image', grid, 0)
+        writer.add_image('image', grid, 0)
         writer.add_graph(model, X)
         
         # Backpropagation
@@ -88,27 +106,39 @@ def train_loop(dataloader, model, loss_fn, optimizer):
         optimizer.step()
         
         cur_loss += loss.item()
-        
+        loss_sum += loss.item()
         total += y.size(0)
-        _, out = torch.max(pred.data, 1)
-        acc = (y == out).type(torch.float).sum().item()
-        running_acc += acc
-        writer.add_scalar("Acc/train", acc, batch)
-        writer.add_scalar("Loss/train", loss.item(), batch)
+        running_acc = get_acc(pred, y)
+
+        # total += y.size(0)
+        # _, out = torch.max(pred.data, 1)
+        # acc = (y == out).type(torch.float).sum().item()
+        # running_acc += acc
         
-        
-        if (batch+1) % 200 == 0 :
+        if (batch) % 200 == 199 :
             loss, current = cur_loss/200, (batch+1) * batch_size        
             print(f"loss: {loss:>7f},  [{current:>5d}/{int(size/200)*200:>5d}] ")
             cur_loss = 0.0
-    running_acc /= total 
+    # running_acc /= total 
     print("running_accuracy: ",running_acc)
+    writer.add_scalar("Train/Loss/epoch", running_acc, epoch+1)
+    writer.add_scalar("Train/Acc/epoch", loss_sum / total, epoch+1)
     writer.flush()
     
    
     
-            
-def test_loop(dataloader, model, loss_fn, k, outputs):
+@torch.no_grad          
+def test_loop(dataloader, model, loss_fn, epoch, outputs):
+    """
+    Given a dataloader, model, loss function, and epoch number, run the model through the dataset and
+    record the loss
+    
+    :param dataloader: a torch.utils.data.DataLoader object that fetches data from a dataset
+    :param model: the model we're testing on
+    :param loss_fn: The loss function we're using during training (we'll use nn.CrossEntropyLoss())
+    :param epoch: the current epoch number
+    :param outputs: a list to append the outputs from the model to
+    """
     num_batches = len(dataloader)
     test_loss, correct = 0, 0
     total = 0
@@ -126,16 +156,18 @@ def test_loop(dataloader, model, loss_fn, k, outputs):
             _, out = torch.max(pred.data, 1)
             acc = (y == out).type(torch.float).sum().item()
             correct += acc
-            writer.add_scalar("Loss/test", loss_, i)
-            writer.add_scalar("Acc/test", acc, i)
+            
             
     test_loss /= num_batches
     correct /= total
-    print(f"Accuracy for {k+1} fold: Accuracy: {(100.0 *correct):>0.1f}%, Test loss: {test_loss:>8f} \n")
-    outputs[k] = 100.0 * (correct) 
+    print(f"Accuracy for {epoch+1} fold: Accuracy: {(100.0 *correct):>0.1f}%, Test loss: {test_loss:>8f} \n")
+    outputs[epoch] = 100.0 * (correct) 
+    writer.add_scalar("Test/loss/epoch", test_loss, epoch+1)
+    writer.add_scalar("Test/acc/epoch", correct, epoch+1)
     writer.flush()
-    
-    
+
+
+@train 
 def train():
     
     path = "./data"
@@ -161,34 +193,25 @@ def train():
     model = model.to(device)
     model.apply(reset_weights)
     
-    optimizer = optim.Adam(model.parameters(), lr = lr, weight_decay = weight_decay)
+    optimizer = optim.SGD(model.parameters(), lr = lr, momentum = 0.9, weight_decay = weight_decay)
     loss_function = nn.CrossEntropyLoss()
     
     for epoch in range(epochs):
         print('epoch {}'.format(epoch+1))
         print(''*20)
         train_loop(trainloader, model, loss_function, optimizer)
-        
-    
+        #Evaluation 
+        test_loop(testloader, model, loss_function, epoch, outputs) 
+
     print('Epoch Training is Done! Saving trained model.')
     print('Starting testing!')
     Time = time.ctime()
     Time = Time.replace(' ','_')
     save_path = f'./checkpoints/model-fold-{fold}-{Time}.pth'
     torch.save(model.state_dict(), save_path)
-    
-    #Evaluation 
-    test_loop(testloader, model, loss_function, fold, outputs) 
-    
+
     writer.close()
-    #fold results
-    # print(f'{k_folds} FOLD')
     print('-'*10)
-    # sum = 0.0
-    # for key, value in outputs.items():
-    #     print(f'FOLD{key+1}: {value}%')
-    #     sum += value
-    # print('Average:', sum/len(outputs.items()),'%')
     print('ALl Done!')
     
  
