@@ -72,7 +72,7 @@ augement = transforms.Compose([
     lambda x: Image.open(x).convert('RGB'),
     # transforms.Scale(256),
     # transforms.CenterCrop(224),
-    transforms.Resize((512,512)),
+    transforms.Resize((224,224)),
     transforms.RandomHorizontalFlip(),
     transforms.RandomCrop(196),
     transforms.ColorJitter(brightness=0.5, contrast=0.5, hue=0.5),
@@ -155,8 +155,6 @@ class TestDataset(Dataset):
     
     
     
-
-    
 def unnorm(img, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
     for t, m, s in zip(img, mean, std):
         t.mul_(s).add_(m)
@@ -173,8 +171,8 @@ def loader(img_label, img_dir):
 
 if __name__=='__main__':
     data_split(path)
-    img_label = os.path.join(path, 'label', 'label.csv')
-    img_dir = os.path.join(path, 'img')
+    img_label = os.path.join(path, 'label', 'label_N.csv')
+    img_dir = os.path.join(path, 'N')
     
     # train_data = MedicalImageDataset(img_label, img_dir) 
     # # test_data = MedicalImageDataset()

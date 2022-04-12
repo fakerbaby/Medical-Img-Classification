@@ -17,7 +17,7 @@ import pandas as pd
 
 
 source_path = './data/'
-target_path = './data/img/'
+target_path = './data/N/'
 
 parser = ArgumentParser()
 parser.add_argument('source', type=str, help='data source path', nargs='?', default= source_path)
@@ -92,7 +92,22 @@ def find_by_pattern(str_list):
     if pattern.match(str_list) is not None:
         return True
     return False
-    
+
+def find_by_negative(str_list):
+    s = r'A\w*-\w*-\w*-\w*_\w*-\w*-N\.bmp'
+    pattern = re.compile(s)
+    if pattern.match(str_list) is not None:
+        return True
+    return False
+
+def find_by_positive(str_list):
+    s = r'A\w*-\w*-\w*-\w*_\w*-\w*-T\.bmp'
+    pattern = re.compile(s)
+    if pattern.match(str_list) is not None:
+        return True
+    return False
+
+
 def add_header(csv_path):
     df = pd.read_csv(csv_path, names=["img_name","label"])
     return df.to_csv(csv_path, index = False)
@@ -122,7 +137,7 @@ def generate_csv(source_path, target_path):
     print(label_dict)
 
     try:
-        with open(source_path + '/label/label.csv', 'w') as f:
+        with open(source_path + '/label/label_N.csv', 'w') as f:
             w = csv.writer(f)
             for k,v in label_dict.items():
                 w.writerow([k,v])
@@ -130,7 +145,7 @@ def generate_csv(source_path, target_path):
     except IOError as e:
         print(e.strerror)
     
-    add_header(source_path + '/label/label.csv')
+    add_header(source_path + '/label/label_N.csv')
     #generate a label.csv 
 
     

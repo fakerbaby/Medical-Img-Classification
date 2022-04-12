@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from model import AutoEncoder, Classification_NNet
 from DataLoader import loader, TrainDataset, TestDataset, MedicalImageDataset
 import matplotlib.pyplot as plt
@@ -11,7 +12,7 @@ import torch.optim as optim
 import torch
 from torchvision.utils import save_image, make_grid
 from torch.autograd import Variable
-
+from sklearn.model_selection import train_test_split
 
 from torch.utils.data import Dataset, DataLoader, random_split
 from sklearn.model_selection import KFold
@@ -28,21 +29,21 @@ args = parser.parse_args()
 
 # CUDA
 os.environ['CUDA_VISIBLE_DEVICES'] = "0,1,2,3,4,5,6,7"
-
-device = torch.device('cuda:6' if torch.cuda.is_available() else 'cpu')
+x = args.gpu_id
+x = x.split('=')[-1]
+device = torch.device(f'cuda:{x}' if torch.cuda.is_available() else 'cpu')
 
 
 # Random seed
 torch.manual_seed(42)
-batch_size = 50
-writer = SummaryWriter()
+batch_size = 40
+writer = SummaryWriter("runs/experiment7/")
 
 
 class focal_loss(nn.Module):
     def __init__(self, alpha=0.25, gamma=2, num_classes = 2, size_average=True):
         """
-        focal_loss损失函数, -α(1-yi)**γ *ce_loss(xi,yi)
-        步骤详细的实现了 focal_loss损失函数.
+        focal_loss, -alpha(1-yi)**gama *ce_loss(xi,yi)
         :param alpha:   阿尔法α,类别权重.      当α是列表时,为各类别权重,当α为常数时,类别权重为[α, 1-α, 1-α, ....],常用于 目标检测算法中抑制背景类 , retainnet中设置为0.25
         :param gamma:   伽马γ,难易样本调节参数. retainnet中设置为2
         :param num_classes:     类别数量
@@ -89,8 +90,6 @@ class focal_loss(nn.Module):
         return loss
     
     
-
-
 def reset_weights(m):
   '''
     Try resetting model weights to avoid
@@ -118,23 +117,6 @@ def get_acc(outputs, labels):
 
 
 def train_loop(dataloader, model, loss_fn, optimizer, epoch):
-    """
-    This function is the main training loop. 
-    
-    It takes in a dataloader, a model, a loss function, an optimizer, and an epoch number. 
-    
-    It then iterates through the dataloader, and for each batch, it passes the batch through the model, 
-    calculates the loss, computes the gradient of the loss with respect to the parameters of the model, 
-    updates the parameters of the model, and then zero's out the gradients. 
-    
-    The function returns the average loss for the epoch.
-    
-    :param dataloader: The PyTorch DataLoader that we created above
-    :param model: The model we defined earlier
-    :param loss_fn: The loss function we're using. In our case, we'll use the cross-entropy loss
-    :param optimizer: The optimizer that will be used to train the model
-    :param epoch: The current epoch number
-    """
     size = len(dataloader) * batch_size
     running_acc = 0.0
     cur_loss = 0.0
@@ -143,7 +125,6 @@ def train_loop(dataloader, model, loss_fn, optimizer, epoch):
     acc = 0.0
     tic = time.time()
     for batch, (X, y) in enumerate(dataloader):
-   
         # Compute prediction and loss
         X = X.to(device)
         y = y.to(device)
@@ -152,9 +133,12 @@ def train_loop(dataloader, model, loss_fn, optimizer, epoch):
         pred = model(X)
         loss = loss_fn(pred, y)
         if batch == 0 and epoch == 0:
+            a = time.time()
             grid = make_grid(X)
             writer.add_image('image', grid, 0)
-            # writer.add_graph(model, X)
+            b = time.time()
+            print(f"load image costs {(b-a):>0.2f}\n")
+            writer.add_graph(model, X)
         
         # Backpropagation
         optimizer.zero_grad()
@@ -171,25 +155,59 @@ def train_loop(dataloader, model, loss_fn, optimizer, epoch):
         # _, out = torch.max(pred.data, 1)
         # acc = (y == out).type(torch.float).sum().item()
         # running_acc += acc
-        if (batch) % 200 == 199 :
-            loss, current = cur_loss/200, (batch+1) * batch_size        
-            print(f"loss: {loss:>7f},  [{current:>5d}/{int(size/200)*200:>5d}] ")
+        if (batch) % 100 == 99 :
+            loss, current = cur_loss/100, (batch+1) * batch_size        
+            print(f"loss: {loss:>7f},  [{current:>5d}]")
             cur_loss = 0.0
 
     acc /= batch_num
-    print("Train epoch result")
-    print(f"Accuracy for epoch[{epoch+1}] train: {(100*acc):>0.6f} || Train Loss: {(loss_sum / batch_num):>8f} ",)
+    print(f"Train epoch [{epoch+1}] result")
+    print(f"Accuracy for Training: {(100*acc):>0.6f}% || Train Loss: {(loss_sum / batch_num):>8f} ",)
     toc = time.time()
-    print(f"time used: {toc - tic}")
+    print(f"time for training cost: {(toc - tic):>0.2f}s\n")
     writer.add_scalar("Train/Loss/epoch", loss_sum / batch_num, epoch+1)
     writer.add_scalar("Train/Acc/epoch", acc, epoch+1)
 
     writer.flush()
     
-   
-    
-       
-def test_loop(dataloader, model, loss_fn, epoch):
+
+def valid_loop(dataloader, model, loss_fn, epoch):
+    num_batches = len(dataloader)
+    valid_loss, correct = 0, 0
+    a = time.time()
+
+
+    with torch.no_grad():
+        model.eval()
+        for i, (X, y) in enumerate(dataloader):
+            X = X.to(device)
+            y = y.to(device)
+            X = Variable(X)
+            y= Variable(y)
+            pred = model(X)
+            loss_ = loss_fn(pred, y).item()
+            valid_loss += loss_
+            # total += y.size(0)
+            correct += get_acc(pred,y)
+
+            # _, out = torch.max(pred.data, 1)
+            # acc = (y == out).type(torch.float).sum().item()
+            # correct += acc
+            
+            
+    valid_loss /= num_batches
+    correct /= num_batches
+    print(f"Validation epoch [{epoch+1}] result")
+    print(f"Accuracy for Validation: {(100.0 *correct):>0.6f}% || Validation loss: {valid_loss:>8f} ")
+    b= time.time()
+    print(f"evaluation costs {(b-a):>0.2f}s\n")
+    writer.add_scalar("Validation/Loss/epoch", valid_loss, epoch+1)
+    writer.add_scalar("Validation/Acc/epoch", correct, epoch+1)
+    writer.flush()
+    return valid_loss
+
+
+def test_loop(dataloader, model, loss_fn):
     """
     Given a dataloader, model, loss function, and epoch number, run the model through the dataset and
     record the loss
@@ -201,7 +219,6 @@ def test_loop(dataloader, model, loss_fn, epoch):
     """
     num_batches = len(dataloader)
     test_loss, correct = 0, 0
-    total = 0
     with torch.no_grad():
         model.eval()
         for i, (X, y) in enumerate(dataloader):
@@ -212,7 +229,7 @@ def test_loop(dataloader, model, loss_fn, epoch):
             pred = model(X)
             loss_ = loss_fn(pred, y).item()
             test_loss += loss_
-            total += y.size(0)
+            # total += y.size(0)
             correct += get_acc(pred,y)
 
             # _, out = torch.max(pred.data, 1)
@@ -222,136 +239,85 @@ def test_loop(dataloader, model, loss_fn, epoch):
             
     test_loss /= num_batches
     correct /= num_batches
-    print("Test epoch result")
-    print(f"Accuracy for epoch [{epoch+1}] Test: {(100.0 *correct):>0.6f}%,||Test loss: {test_loss:>8f} \n")
-    writer.add_scalar("Test/Loss/epoch", test_loss, epoch+1)
-    writer.add_scalar("Test/Acc/epoch", correct, epoch+1)
+    print("*"*20)
+    print("**Final Test result**")
+    print(f"Accuracy for final Test: {(100.0 *correct):>0.7f}%,||Test loss: {test_loss:>8f} \n")
+    writer.add_scalar("Test/Loss/epoch", test_loss, 1)
+    writer.add_scalar("Test/Acc/epoch", correct, 1)
     writer.flush()
 
 
 
 def train():
     #path
+    # CUDA_LAUNCH_BLOCKING=1
     path = "./data"
     img_label = os.path.join(path, 'label', 'label.csv')
     img_dir = os.path.join(path, 'img')
 
     #hyperparameter
-    epochs = 20
-    lr = 3e-5
-    weight_decay = 1e-7
-
-
+    epochs = 50
+    lr = 3e-4
+    weight_decay = 1e-5
+    proportion = 0.80
+    alpha = 0.25
+    gamma = 2
     full_data = MedicalImageDataset(img_label, img_dir) 
-    train_size = int(0.7* len(full_data))
+
+    train_size = int(proportion * len(full_data))
     full_size = len(full_data)
-    test_size = full_size - train_size
-    train_data, test_data = random_split(full_data, [train_size, test_size])
+    test_size = int((full_size - train_size)/2)
+    valid_size = full_size - train_size - test_size
+    train_data, valid_data, test_data  = random_split(full_data, [train_size, valid_size, test_size])
+    
     ## train
     # train_subsampler = torch.utils.data.SubsetRandomSampler(train_data)
     # test_subsampler = torch.utils.data.SubsetRandomSampler(test_data)
     
     trainloader = DataLoader(train_data, batch_size=batch_size, shuffle = True)
-    testloader = DataLoader(test_data, batch_size=batch_size)
+    validloader = DataLoader(valid_data, batch_size=batch_size, shuffle = False)
+    testloader = DataLoader(test_data, batch_size=batch_size, shuffle = False)
     
      # Init the NN
     model = Classification_NNet()
     # writer = SummaryWriter()
     model = model.to(device)
-    model.apply(reset_weights)
+    # model.apply(reset_weights)
     
     optimizer = optim.SGD(model.parameters(), lr = lr, momentum = 0.9, weight_decay = weight_decay)
-    # loss_function = nn.CrossEntropyLoss()
-    loss_function = focal_loss()
+    # optimizer = optim.AdamW(model.parameters(),lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=weight_decay, amsgrad=False, maximize=False)
 
+    # loss_function = nn.CrossEntropyLoss()
+    loss_function = focal_loss(alpha,gamma)
+
+    minloss = 10000
     for epoch in range(epochs):
         print('epoch {}'.format(epoch+1))
         print(''*20)
         train_loop(trainloader, model, loss_function, optimizer, epoch)
         #Evaluation 
-        test_loop(testloader, model, loss_function, epoch) 
+        loss = valid_loop(validloader, model, loss_function, epoch) 
+        # #histogram
+        # for name, param in model.named_parameters():
+        #     writer.add_histogram(tag=name+'_grad', values=param.grad, global_step=epoch)
+        #     writer.add_histogram(tag=name+'_data', values=param.data, global_step=epoch)
 
-    print('Epoch Training is Done! Saving trained model.')
+        if loss < minloss:
+            minloss = loss
+            print("Saving trained model.")
+            Time = time.ctime()
+            Time = Time.replace(' ','_')    
+            save_path = f'./checkpoints/exp7/modelSGD-{lr}-{weight_decay}-{proportion}-{batch_size}.pth'
+            torch.save(model.state_dict(), save_path)   
+        
+    print('Epoch Training is Done! ')
+    print(f'hyperparameter:\nbatch_size={batch_size},lr={lr},weight_decay = {weight_decay}, proportion={proportion} ')
     print('Starting testing!')
-    Time = time.ctime()
-    Time = Time.replace(' ','_')
-    save_path = f'./checkpoints/model-fold-{Time}.pth'
-    torch.save(model.state_dict(), save_path)
-
+    test_loop(testloader, model, loss_function)
     writer.close()
     print('-'*10)
     print('ALl Done!')
     
  
-
-# def K_Fold_train():
-#     k_folds = 5
-#     path = "./data"
-#     epochs = 20
-#     lr = 3e-4
-#     weight_decay = 1e-4
-#     outputs = {}  
-#     lr = 3e-4
-#     weight_decay = 1e-3 
-    
-#     img_label = os.path.join(path, 'label', 'label.csv')
-#     img_dir = os.path.join(path, 'img')
-    
-#     data_set = MedicalImageDataset(img_label, img_dir) 
-    
-    
-#     # Define the K-fold Cross Validator
-#     kfold = KFold(n_splits=k_folds, shuffle=True)
-#     # Start print
-
-#     # K-fold Cross Validation model evaluation
-#     for fold, (train_ids, test_ids) in enumerate(kfold.split(data_set)):
-#         print(f'FOLD {fold+1}')
-#         print('='*10)
-          
-#         # Sample elements randomly from a given list of ids, no replacement.
-#         train_subsampler = torch.utils.data.SubsetRandomSampler(train_ids)
-#         test_subsampler = torch.utils.data.SubsetRandomSampler(test_ids)
-        
-#         trainloader = DataLoader(data_set, batch_size=batch_size, sampler=train_subsampler)
-#         testloader = DataLoader(data_set, batch_size=batch_size, sampler=test_subsampler)
-
-#         # Init the NN
-#         model = Classification_NNet()
-#         # writer = SummaryWriter()
-#         model = model.to(device)
-#         model.apply(reset_weights)
-        
-#         optimizer = optim.Adam(model.parameters(), lr = lr, weight_decay = weight_decay)
-#         loss_function = nn.CrossEntropyLoss()
-             
-#         for epoch in range(epochs):
-#             print('epoch {}'.format(epoch+1))
-#             print(''*20)
-#             train_loop(trainloader, model, loss_function, optimizer)
-        
-        
-#         print('Epoch Training is Done! Saving trained model.')
-#         print('Starting testing!')
-#         Time = time.ctime()
-#         Time = Time.replace(' ','_')
-#         save_path = f'./checkpoints/model-fold-{fold}-{Time}.pth'
-#         torch.save(model.state_dict(), save_path)
-        
-#         #Evaluation this fold
-#         test_loop(testloader, model, loss_function, fold, outputs)
-        
-#     writer.close()
-#     #fold results
-#     print(f'{k_folds} FOLD')
-#     print('-'*10)
-#     sum = 0.0
-#     for key, value in outputs.items():
-#         print(f'FOLD{key+1}: {value}%')
-#         sum += value
-#     print('Average:', sum/len(outputs.items()),'%')
-#     print('ALl Done!')
-
-
 
 train()

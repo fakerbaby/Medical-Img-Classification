@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 import os
 import torchvision.models as models
+from torch.nn import functional as F
 
 
 
@@ -12,9 +13,9 @@ class AutoEncoder(nn.Module):
     def __init__(self) -> None:
         super(AutoEncoder, self).__init__()
         self.encoder = nn.Sequential(
-            nn.Linear(512, 384),
+            nn.Linear(224, 192),
             nn.ReLU(True),
-            nn.Linear(384, 128),
+            nn.Linear(192, 128),
             nn.ReLU(True),
             # nn.Linear(392 , 128),
             # nn.ReLU(True),
@@ -27,16 +28,53 @@ class AutoEncoder(nn.Module):
             nn.ReLU(True),
             nn.Linear(64, 128),
             nn.ReLU(True), 
-            nn.Linear(128, 384 ),
+            nn.Linear(128, 192 ),
             nn.ReLU(True), 
-            nn.Linear(384, 512), 
+            nn.Linear(192, 224), 
             nn.Tanh())
         
     def forward(self, x):
+        fea1 = x
         x = self.encoder(x)
         x = self.decoder(x)
-        return x
+        fea2 = x
+        return x, fea1, fea2
 
+class ConvolutionAE(nn.Module):
+    def __init__(self) -> None:
+        super(ConvolutionAE, self).__init__()
+         ## encoder layers ##
+        # conv layer (depth from 1 --> 16), 3x3 kernels
+        self.conv1 = nn.Conv2d(3, 16, (3,3), (1,1), padding=(1,1))  
+        # conv layer (depth from 16 --> 4), 3x3 kernels
+        self.conv2 = nn.Conv2d(16, 4, (3,3), (1,1), padding=(1,1))
+        # pooling layer to reduce x-y dims by two; kernel and stride of 2
+        self.pool = nn.MaxPool2d(2, 2, dilation=1 )
+        
+        ## decoder layers ##
+        ## a kernel of 2 and a stride of 2 will increase the spatial dims by 2
+        self.t_conv1 = nn.ConvTranspose2d(4, 16, (2,2), stride=(2,2))
+        self.t_conv2 = nn.ConvTranspose2d(16, 3, (2,2), stride=(2,2))
+
+    def forward(self, x):
+         ## encode ##
+        # add hidden layers with relu activation function
+        # and maxpooling after
+        fea0 = x
+        x = F.relu(self.conv1(x))
+        x = self.pool(x)
+        # add second hidden layer
+        x = F.relu(self.conv2(x))
+        x = self.pool(x)  # compressed representation
+        
+        ## decode ##
+        # add transpose conv layers, with relu activation function
+        x = F.relu(self.t_conv1(x))
+        # output layer (with sigmoid for scaling from 0 to 1)
+        x = F.sigmoid(self.t_conv2(x))
+        fea1 = x
+
+        return x, fea0, fea1
 
 class CNNet(nn.Module):
     def __init__(self) -> None:
@@ -53,7 +91,7 @@ class CNNet(nn.Module):
         self.fc = nn.Sequential(nn.Linear(1296,256),nn.Linear(256,32),nn.Linear(32,2))
  
     def forward(self, x):
-        print(x.shape)
+        # print(x.shape)
         out = self.conv(x)
         out = out.view(out.size(0),-1)
         return self.fc(out)
@@ -165,24 +203,42 @@ def ResNet152():
 
 
 
-
-
-
 class Classification_NNet(nn.Module):
     def __init__(self) -> None:
         super().__init__()
-        self.module = AutoEncoder()
+        self.module = ConvolutionAE()
         self.module2 = models.resnet18(pretrained = True)
         self.fc = nn.Sequential(
             nn.Dropout(True),
             nn.Linear(1000, 2))
         
     def forward(self, x):
-        x = self.module.forward(x)
+        # module = self.module.forward(x)
+        # x = module[0]
         x = self.module2.forward(x)
         x = self.fc(x)
         x = torch.sigmoid(x)
         return x
+
+
+class Classification_NNet_(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.module = ConvolutionAE()
+        self.module2 = models.resnet18(pretrained = True)
+        self.fc = nn.Sequential(
+            nn.Dropout(True),
+            nn.Linear(1000, 2))
+        
+    def forward(self, x):
+        module = self.module.forward(x)
+        x = module[0]
+        orign = module[1]
+        filtered = module[2]
+        x = self.module2.forward(x)
+        x = self.fc(x)
+        x = torch.sigmoid(x)
+        return x, orign, filtered
 
 
     
@@ -192,36 +248,8 @@ def main():
     
     input = torch.randn(4, 3, 224, 224)
     out = model(input)
-    print(out.shape)    
+    # print(out.shape)    
 
 
-
-def feature_extract():
-    #todo
-    img_path = ''
-    sav_path = ''
-    extrac_list = []
-    reset = models.resnet50(pretrained = True)
     
-    
-
-# 中间层特征提取
-class FeatureExtractor(nn.Module):
-    def __init__(self, submodule, extracted_layers):
-        super(FeatureExtractor, self).__init__()
-        self.submodule = submodule
-        self.extracted_layers = extracted_layers
- 
-    # 自己修改forward函数
-    def forward(self, x):
-        outputs = []
-        for name, module in self.submodule._modules.items():
-            if name is "fc": x = x.view(x.size(0), -1)
-            x = module(x)
-            if name in self.extracted_layers:
-                outputs.append(x)
-        return outputs
-    
-    
-
 main()
