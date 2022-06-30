@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from model import AutoEncoder, Classification_NNet
+from model import AutoEncoder, Classification_NNet, Classification_NNet_50, Classification_NNet_101
 from DataLoader import loader, TrainDataset, TestDataset, MedicalImageDataset
 import matplotlib.pyplot as plt
 
@@ -10,34 +10,53 @@ import time
 import torch.nn  as nn
 import torch.optim as optim
 import torch
+import shutil
+
 from torchvision.utils import save_image, make_grid
 from torch.autograd import Variable
 from sklearn.model_selection import train_test_split
+
 
 from torch.utils.data import Dataset, DataLoader, random_split
 from sklearn.model_selection import KFold
 from torch.utils.tensorboard import SummaryWriter
 
+from tqdm import tqdm
 from argparse import  ArgumentParser
-
+from preprocess import generate_csv
 parser = ArgumentParser()
 parser.add_argument('gpu_id',type=str, help='gpu_id', nargs='?', default= '0')
 parser.add_argument('batch_size',type=int, help='batch_size', nargs='?', default= 32)
 # parser.add_argument('',type=int, help='batch_size', nargs='?', default= 32)
 
 args = parser.parse_args()
+#path
+path = "./data"
+img_label = os.path.join(path, 'label', 'label.csv')
+img_dir = os.path.join(path, 'img')
+tvt_img_path = ['data/train_n', 'data/valid_n', 'data/test_n']
+tvt_label_path = ['data/label/label_train_n.csv', 'data/label/label_valid_n.csv', 'data/label/label_test_n.csv']
 
 # CUDA
+# CUDA_LAUNCH_BLOCKING=1
 os.environ['CUDA_VISIBLE_DEVICES'] = "0,1,2,3,4,5,6,7"
 x = args.gpu_id
 x = x.split('=')[-1]
 device = torch.device(f'cuda:{x}' if torch.cuda.is_available() else 'cpu')
 
+#hyperparameter
 
 # Random seed
 torch.manual_seed(42)
-batch_size = 40
-writer = SummaryWriter("runs/experiment7/")
+batch_size = 4
+epochs = 100
+lr = 5e-6
+weight_decay = 3e-2
+proportion = 0.80
+alpha = 0.20
+gamma = 2
+model_name = f"new_model_Adam_512-res101-{epochs}-{lr}-{weight_decay}-{batch_size}"
+writer = SummaryWriter(f'runs/{model_name}')
 
 
 class focal_loss(nn.Module):
@@ -101,12 +120,6 @@ def reset_weights(m):
     layer.reset_parameters()
 
 
-def to_img(x):
-    x = 0.5 * (x + 1)
-    x = x.clamp(0, 1)
-    x = x.view(x.size(0), 1, 224, 224)
-    return x
-
 
 def get_acc(outputs, labels):
     _, predict = torch.max(outputs.data, 1)
@@ -124,7 +137,7 @@ def train_loop(dataloader, model, loss_fn, optimizer, epoch):
     batch_num = len(dataloader)
     acc = 0.0
     tic = time.time()
-    for batch, (X, y) in enumerate(dataloader):
+    for batch, (X, y) in enumerate(tqdm(dataloader)):
         # Compute prediction and loss
         X = X.to(device)
         y = y.to(device)
@@ -132,13 +145,13 @@ def train_loop(dataloader, model, loss_fn, optimizer, epoch):
         y= Variable(y)
         pred = model(X)
         loss = loss_fn(pred, y)
-        if batch == 0 and epoch == 0:
-            a = time.time()
-            grid = make_grid(X)
-            writer.add_image('image', grid, 0)
-            b = time.time()
-            print(f"load image costs {(b-a):>0.2f}\n")
-            writer.add_graph(model, X)
+        # if batch == 0 and epoch == 0:
+            # a = time.time()
+            # grid = make_grid(X)
+            # writer.add_image('image', grid, 0)
+            # b = time.time()
+            # print(f"load image costs {(b-a):>0.2f}\n")
+            # writer.add_graph(model, X)
         
         # Backpropagation
         optimizer.zero_grad()
@@ -155,10 +168,10 @@ def train_loop(dataloader, model, loss_fn, optimizer, epoch):
         # _, out = torch.max(pred.data, 1)
         # acc = (y == out).type(torch.float).sum().item()
         # running_acc += acc
-        if (batch) % 100 == 99 :
-            loss, current = cur_loss/100, (batch+1) * batch_size        
-            print(f"loss: {loss:>7f},  [{current:>5d}]")
-            cur_loss = 0.0
+        # if (batch) % 100 == 99 :
+        #     loss, current = cur_loss/100, (batch+1) * batch_size        
+        #     print(f"loss: {loss:>7f},  [{current:>5d}]")
+        #     cur_loss = 0.0
 
     acc /= batch_num
     print(f"Train epoch [{epoch+1}] result")
@@ -167,7 +180,6 @@ def train_loop(dataloader, model, loss_fn, optimizer, epoch):
     print(f"time for training cost: {(toc - tic):>0.2f}s\n")
     writer.add_scalar("Train/Loss/epoch", loss_sum / batch_num, epoch+1)
     writer.add_scalar("Train/Acc/epoch", acc, epoch+1)
-
     writer.flush()
     
 
@@ -179,7 +191,7 @@ def valid_loop(dataloader, model, loss_fn, epoch):
 
     with torch.no_grad():
         model.eval()
-        for i, (X, y) in enumerate(dataloader):
+        for i, (X, y) in enumerate(tqdm(dataloader)):
             X = X.to(device)
             y = y.to(device)
             X = Variable(X)
@@ -221,7 +233,7 @@ def test_loop(dataloader, model, loss_fn):
     test_loss, correct = 0, 0
     with torch.no_grad():
         model.eval()
-        for i, (X, y) in enumerate(dataloader):
+        for i, (X, y) in enumerate(tqdm(dataloader)):
             X = X.to(device)
             y = y.to(device)
             X = Variable(X)
@@ -248,52 +260,37 @@ def test_loop(dataloader, model, loss_fn):
 
 
 
+
 def train():
-    #path
-    # CUDA_LAUNCH_BLOCKING=1
-    path = "./data"
-    img_label = os.path.join(path, 'label', 'label.csv')
-    img_dir = os.path.join(path, 'img')
 
-    #hyperparameter
-    epochs = 50
-    lr = 3e-4
-    weight_decay = 1e-5
-    proportion = 0.80
-    alpha = 0.25
-    gamma = 2
-    full_data = MedicalImageDataset(img_label, img_dir) 
+    train_data, valid_data, test_data  = [MedicalImageDataset(tvt_label_path[i], tvt_img_path[i]) for i in range(3)]
 
-    train_size = int(proportion * len(full_data))
-    full_size = len(full_data)
-    test_size = int((full_size - train_size)/2)
-    valid_size = full_size - train_size - test_size
-    train_data, valid_data, test_data  = random_split(full_data, [train_size, valid_size, test_size])
-    
     ## train
     # train_subsampler = torch.utils.data.SubsetRandomSampler(train_data)
     # test_subsampler = torch.utils.data.SubsetRandomSampler(test_data)
     
-    trainloader = DataLoader(train_data, batch_size=batch_size, shuffle = True)
-    validloader = DataLoader(valid_data, batch_size=batch_size, shuffle = False)
-    testloader = DataLoader(test_data, batch_size=batch_size, shuffle = False)
+    trainloader = DataLoader(train_data, batch_size=batch_size, shuffle = True, pin_memory=True)
+    validloader = DataLoader(valid_data, batch_size=batch_size, shuffle = False, pin_memory=True)
+    testloader = DataLoader(test_data, batch_size=batch_size, shuffle = False, pin_memory=True)
     
+
      # Init the NN
-    model = Classification_NNet()
+    # model = Classification_NNet()
+    model = Classification_NNet_101()
     # writer = SummaryWriter()
     model = model.to(device)
     # model.apply(reset_weights)
     
-    optimizer = optim.SGD(model.parameters(), lr = lr, momentum = 0.9, weight_decay = weight_decay)
-    # optimizer = optim.AdamW(model.parameters(),lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=weight_decay, amsgrad=False, maximize=False)
+    # optimizer = optim.SGD(model.parameters(), lr = lr, momentum = 0.9, weight_decay = weight_decay)
+    optimizer = optim.AdamW(model.parameters(),lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=weight_decay, amsgrad=False, maximize=False)
 
     # loss_function = nn.CrossEntropyLoss()
     loss_function = focal_loss(alpha,gamma)
-
     minloss = 10000
-    for epoch in range(epochs):
+    for epoch in tqdm(range(epochs)):
+        print('='*20)
         print('epoch {}'.format(epoch+1))
-        print(''*20)
+        print('='*20)
         train_loop(trainloader, model, loss_function, optimizer, epoch)
         #Evaluation 
         loss = valid_loop(validloader, model, loss_function, epoch) 
@@ -307,9 +304,14 @@ def train():
             print("Saving trained model.")
             Time = time.ctime()
             Time = Time.replace(' ','_')    
-            save_path = f'./checkpoints/exp7/modelSGD-{lr}-{weight_decay}-{proportion}-{batch_size}.pth'
+            save_path = f'./checkpoints/new/{model_name}--best.pth'
             torch.save(model.state_dict(), save_path)   
-        
+        if epoch % 100 == 99:
+        #     print("Saving trained model.")
+        #     Time = time.ctime()
+        #     Time = Time.replace(' ','_')    
+            save_path = f'./checkpoints/recall/{model_name}-{epoch}.pth'
+            torch.save(model.state_dict(), save_path) 
     print('Epoch Training is Done! ')
     print(f'hyperparameter:\nbatch_size={batch_size},lr={lr},weight_decay = {weight_decay}, proportion={proportion} ')
     print('Starting testing!')
@@ -319,5 +321,7 @@ def train():
     print('ALl Done!')
     
  
-
-train()
+if __name__ =='__main__':
+    # torch.multiprocessing.set_start_method('spawn')
+    # torch.cuda.synchronize()
+    train()

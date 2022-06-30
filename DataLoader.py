@@ -169,30 +169,30 @@ def loader(img_label, img_dir):
 
 
 
-if __name__=='__main__':
-    data_split(path)
-    img_label = os.path.join(path, 'label', 'label_N.csv')
-    img_dir = os.path.join(path, 'N')
+# if __name__=='__main__':
+#     data_split(path)
+#     img_label = os.path.join(path, 'label', 'label_N.csv')
+#     img_dir = os.path.join(path, 'N')
     
-    # train_data = MedicalImageDataset(img_label, img_dir) 
-    # # test_data = MedicalImageDataset()
-    # train_loader = DataLoader(train_data, batch_size=4, shuffle=True)
+#     # train_data = MedicalImageDataset(img_label, img_dir) 
+#     # # test_data = MedicalImageDataset()
+#     # train_loader = DataLoader(train_data, batch_size=4, shuffle=True)
     
-    train_loader = loader(img_label, img_dir)
-    train_features, train_labels = next(iter(train_loader))
-    
-    
-    tmp = train_features[0]
-    tmp = unnorm(tmp)
-    to_pil_image = transforms.ToPILImage(mode='RGB')(tmp)
-    # img = to_pil_image(train_features[0])
-    # img.show()
-    img_pic = os.path.join(path, 'pic', '1.bmp')
-    to_pil_image.save(img_pic)
+#     train_loader = loader(img_label, img_dir)
+#     train_features, train_labels = next(iter(train_loader))
     
     
-    # img = train_features[0].squeeze()
-    # label = train_labels[0]
+#     tmp = train_features[0]
+#     tmp = unnorm(tmp)
+#     to_pil_image = transforms.ToPILImage(mode='RGB')(tmp)
+#     # img = to_pil_image(train_features[0])
+#     # img.show()
+#     img_pic = os.path.join(path, 'pic', '1.bmp')
+#     to_pil_image.save(img_pic)
+    
+    
+#     # img = train_features[0].squeeze()
+#     # label = train_labels[0]
     
     # img = np.transpose(img, (1,2,0))
     

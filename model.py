@@ -13,7 +13,7 @@ class AutoEncoder(nn.Module):
     def __init__(self) -> None:
         super(AutoEncoder, self).__init__()
         self.encoder = nn.Sequential(
-            nn.Linear(224, 192),
+            nn.Linear(512, 192),
             nn.ReLU(True),
             nn.Linear(192, 128),
             nn.ReLU(True),
@@ -30,7 +30,7 @@ class AutoEncoder(nn.Module):
             nn.ReLU(True), 
             nn.Linear(128, 192 ),
             nn.ReLU(True), 
-            nn.Linear(192, 224), 
+            nn.Linear(192, 512), 
             nn.Tanh())
         
     def forward(self, x):
@@ -206,7 +206,7 @@ def ResNet152():
 class Classification_NNet(nn.Module):
     def __init__(self) -> None:
         super().__init__()
-        self.module = ConvolutionAE()
+        # self.module = ConvolutionAE()
         self.module2 = models.resnet18(pretrained = True)
         self.fc = nn.Sequential(
             nn.Dropout(True),
@@ -220,21 +220,54 @@ class Classification_NNet(nn.Module):
         x = torch.sigmoid(x)
         return x
 
-
-class Classification_NNet_(nn.Module):
+class Classification_NNet_50(nn.Module):
     def __init__(self) -> None:
         super().__init__()
-        self.module = ConvolutionAE()
-        self.module2 = models.resnet18(pretrained = True)
+        # self.module = AutoEncoder()
+        self.module2 = models.resnet50(pretrained = True)
         self.fc = nn.Sequential(
             nn.Dropout(True),
             nn.Linear(1000, 2))
         
     def forward(self, x):
-        module = self.module.forward(x)
-        x = module[0]
-        orign = module[1]
-        filtered = module[2]
+        # module = self.module.forward(x)
+        # x = module[0]
+        x = self.module2.forward(x)
+        x = self.fc(x)
+        x = torch.sigmoid(x)
+        return x
+
+class Classification_NNet_101(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        # self.module = AutoEncoder()
+        self.module2 = models.resnet101(pretrained = True)
+        self.fc = nn.Sequential(
+            nn.Dropout(True),
+            nn.Linear(1000, 2))
+        
+    def forward(self, x):
+        # module = self.module.forward(x)
+        # x = module[0]
+        x = self.module2.forward(x)
+        x = self.fc(x)
+        x = torch.sigmoid(x)
+        return x
+        
+class Classification_NNet_(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        # self.module = ConvolutionAE()
+        self.module2 = models.resnet50(pretrained = True)
+        self.fc = nn.Sequential(
+            nn.Dropout(True),
+            nn.Linear(1000, 2))
+        
+    def forward(self, x):
+        # module = self.module.forward(x)
+        # x = module[0]
+        # orign = module[1]
+        # filtered = module[2]
         x = self.module2.forward(x)
         x = self.fc(x)
         x = torch.sigmoid(x)
@@ -252,4 +285,4 @@ def main():
 
 
     
-main()
+# main()

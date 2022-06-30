@@ -8,13 +8,13 @@ bmp_list = []
 
 
 
-print(pathdir)
-for bmp in pathdir:
-    if find_by_negative(bmp):
-        bmp_list.append(os.path.join(path,bmp))
+# # print(pathdir)
+# for bmp in pathdir:
+#     if find_by_negative(bmp):
+#         bmp_list.append(os.path.join(path,bmp))
     # if fnmatch
-print(len(bmp_list))
-df = pd.read_csv('data/label/label_N.csv')
+# print(len(bmp_list))
+df = pd.read_csv('data/label/label_test_N.csv')
 print(df['label'].value_counts())
 
 # for bmp in bmp_list:
