@@ -8,7 +8,7 @@ data/
 
 nohup.out
 
-checkpints/
+checkpints/*
 
 runs/
 
